@@ -32,6 +32,7 @@ class BiLSTM_CRF(nn.Module):
         self.tagset_size = len(tag_to_ix)
         
         self.word_embeds = nn.Embedding(vocab_size, embedding_dim)
+
         self.lstm = nn.LSTM(embedding_dim, hidden_dim // 2,
                             num_layers=1, bidirectional=True)
                 
@@ -72,6 +73,7 @@ class BiLSTM_CRF(nn.Module):
                 next_tag_var = forward_var + trans_score + emit_score
                 # 这个tag的 前向变量是所有分数的log-sum-exp
                 alphas_t.append(log_sum_exp(next_tag_var).view(1))
+                # pdb.set_trace()
             forward_var = torch.cat(alphas_t).view(1, -1)
         terminal_var = forward_var + self.transitions[self.tag_to_ix[STOP_TAG]]
         alpha = log_sum_exp(terminal_var)
@@ -80,13 +82,13 @@ class BiLSTM_CRF(nn.Module):
     def _get_lstm_features(self, sentence):
         self.hidden = self.init_hidden()
         embeds = self.word_embeds(sentence).view(len(sentence), 1, -1)
-        pdb.set_trace()
+        # pdb.set_trace()
         lstm_out, self.hidden = self.lstm(embeds, self.hidden)
-        pdb.set_trace()
+        # pdb.set_trace()
         lstm_out = lstm_out.view(len(sentence), self.hidden_dim)
-        pdb.set_trace()
+        # pdb.set_trace()
         lstm_feats = self.hidden2tag(lstm_out)
-        pdb.set_trace()
+        # pdb.set_trace()
         return lstm_feats
     
     def _score_sentence(self, feats, tags):
@@ -146,6 +148,7 @@ class BiLSTM_CRF(nn.Module):
         feats = self._get_lstm_features(sentence)
         forward_score = self._forward_alg(feats)
         gold_score = self._score_sentence(feats, tags)
+        pdb.set_trace()
         return forward_score - gold_score
 
     def forward(self, sentence):  # dont confuse this with _forward_alg above.
