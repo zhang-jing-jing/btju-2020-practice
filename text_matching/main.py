@@ -3,6 +3,7 @@ import torch.nn as nn
 import os
 import pdb
 import re # 正则
+from mxnet import gluon
 
 def read_snli(file_path):
     """
@@ -16,8 +17,6 @@ def read_snli(file_path):
         s = re.sub('\\s{2,}', ' ', s)
         return s.strip()
 
-    label_set = {'entailment': 0, 'contradiction': 1, 'neutral': 2}
-
     with open(file_path) as f_file:
         rows = [row.split('\t') for row in f_file.readlines()[1:]]
         premises = [extract_text(row[1]) for row in rows if row[0] in label_set] # 前提
@@ -25,7 +24,10 @@ def read_snli(file_path):
         labels = [label_set[row[0]] for row in rows if row[0] in label_set] #标签
     return premises, hypotheses, labels
 
-train_data = read_snli('./dataset/snli_1.0_train.txt')
+label_set = {'entailment': 0, 'contradiction': 1, 'neutral': 2}
+train_feature1 , train_feature2, train_label  = read_snli('./dataset/snli_1.0_train.txt')
+dev_feature1 , dev_feature2, dev_label  = read_snli('./dataset/snli_1.0_dev.txt')
+test_feature1 , test_feature2, test_label  = read_snli('./dataset/snli_1.0_test.txt')
 
-for a in train_data:
-    pdb.set_trace()
+print(train_feature1[0])
+

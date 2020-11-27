@@ -5,3 +5,5 @@ python main.py \
 --hidden_size 1024 \
 --train_or_test train \
 --param_path './dataset/train4_param.bin'
+
+# 0.7636
