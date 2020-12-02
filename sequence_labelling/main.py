@@ -27,7 +27,7 @@ parser.add_argument('--steps_per_eval', type=int, default=20)
 parser.add_argument('--steps_per_log', type=int, default=10)
 parser.add_argument('--param_path',type=str, default='./dataset/param.bin')
 parser.add_argument('--test_path',type=str, default='./dataset/test/seq.in')
-parser.add_argument('--test_result_path',type=str, default='./dataset/result.txt')
+parser.add_argument('--test_result_path',type=str, default='./result.txt')
 parser.add_argument('--train_or_test', type=str, choices=('train', 'test'), default='train')
 args = parser.parse_args()
 
@@ -67,7 +67,7 @@ def get_vocab(train_feature):
                     fvocab.write(word+'\n')
     return vocab_words
 
-word2vec_path = "./dataset/word2vec.txt"
+word2vec_path = "../wvmodel/word2vec.txt"
 def get_wvmodel():
     if os.path.exists(word2vec_path):
         print('gensim loading word2vec')
@@ -75,7 +75,7 @@ def get_wvmodel():
         wvmodel = gensim.models.KeyedVectors.load_word2vec_format(word2vec_path, binary=False, encoding='utf-8')
     else:
         # 已有的glove词向量
-        glove_file = './dataset/glove/glove.6B.300d.txt'
+        glove_file = '../glove/glove.6B.300d.txt'
         # 指定转化为word2vec格式后文件的位置
         tmp_file = word2vec_path
         #glove词向量转化为word2vec词向量的格式
@@ -90,10 +90,10 @@ def get_weight(wvmodel,vocab_size,embedding_size):
     weight = torch.zeros(vocab_size, embedding_size)
     for i in range(len(wvmodel.index2word)):
         try:
-            index = word_to_idx[wvmodel.index2word[i]]
+            index = word2id[wvmodel.index2word[i]]
         except:
             continue
-        weight[index, :] = torch.from_numpy(wvmodel.get_vector(idx_to_word[word_to_idx[wvmodel.index2word[i]]]))
+        weight[index, :] = torch.from_numpy(wvmodel.get_vector(id2word[word2id[wvmodel.index2word[i]]]))
     return weight
 
 class SentenceDataSet(Dataset):
@@ -220,7 +220,7 @@ def evaluate_accuracy(model, test_loader):
 
 train_feature, train_label = read_file('./dataset/train/seq.in','./dataset/train/seq.out')
 valid_feature, valid_label = read_file('./dataset/valid/seq.in','./dataset/valid/seq.out')
-# test_feature, test_label = read_file('./dataset/test/seq.in','./dataset/test/seq.out')
+test_feature, test_label = read_file('./dataset/test/seq.in','./dataset/test/seq.out')
 
 # vocab_words = get_vocab(train_feature)
 wvmodel = get_wvmodel()
@@ -235,6 +235,7 @@ unk = word2id['[UNK]']              #UNK:低频词
 padding_value = word2id['[PAD]']    #PAD:填充词
 #获得标签字典
 label2id = {'O':0, 'B-LOC':1, 'B-PER':2, 'B-ORG':3, 'I-PER':4, 'I-ORG':5, 'B-MISC':6, 'I-LOC':7, 'I-MISC':8, 'START':9, 'STOP':10}
+id2label = dict((idx, tag) for tag, idx in label2id.items())
 # 词表生成 end
 
 if args.train_or_test == "train":
@@ -242,23 +243,30 @@ if args.train_or_test == "train":
     # 转化为词表里面的index
     train_textlines = [[word2id[word] if word in word2id else unk for word in line] for line in train_feature]
     valid_textlines = [[word2id[word] if word in word2id else unk for word in line] for line in valid_feature]
+    test_textlines = [[word2id[word] if word in word2id else unk for word in line] for line in test_feature]
     
     train_label = [[label2id[word] for word in line] for line in train_label]  
-    valid_label = [[label2id[word] for word in line] for line in valid_label] 
+    valid_label = [[label2id[word] for word in line] for line in valid_label]
+    test_label = [[label2id[word] for word in line] for line in test_label]
 
     train_textlines = [torch.Tensor(line).long() for line in train_textlines]
     train_label = [torch.Tensor(line).long() for line in train_label]
     valid_textlines = [torch.Tensor(line).long() for line in valid_textlines]
     valid_label = [torch.Tensor(line).long() for line in valid_label]
+    test_textlines = [torch.Tensor(line).long() for line in test_textlines]
+    test_label = [torch.Tensor(line).long() for line in test_label]
 
 
     train_data = get_data(train_textlines, train_label)
     valid_data = get_data(valid_textlines, valid_label)
+    test_data = get_data(test_textlines, test_label)
 
     train_loader = torch.utils.data.DataLoader(dataset=train_data,
         batch_size=args.batch_size,collate_fn=collate_fn, shuffle=True)
     valid_loader = torch.utils.data.DataLoader(dataset=valid_data, batch_size=args.batch_size,
         collate_fn=collate_fn, shuffle=False)
+    test_loader = torch.utils.data.DataLoader(dataset=test_data, batch_size=args.batch_size,
+                                               collate_fn=collate_fn, shuffle=False)
 
     weight_matrix = get_weight(wvmodel,len(word2id),args.embedding_size)
     print('weight_matrix',weight_matrix.size())
@@ -273,20 +281,16 @@ if args.train_or_test == "train":
     criterion = torch.nn.CrossEntropyLoss()
 
     train(args, train_loader,valid_loader, model, optim, criterion)
+    end_loss, end_f1 = evaluate_accuracy(model, test_loader)
+    print("====================>test loss: %.4f, test f1 : %.4f"%(end_loss, end_f1))
 else:
     print('test begin')
     with open(args.test_path, 'r', encoding='utf-8') as ftest_text:
         test_textlines = [line.strip().lower().split(' ') for line in ftest_text.readlines()]
 
         test_textlines = [[word2id[word] if word in word2id else unk for word in line] for line in test_textlines]
-        
+
         test_textlines = [torch.Tensor(line).long() for line in test_textlines]
-
-        test_dataset = torch.utils.data.TensorDataset(test_textlines)
-
-        test_loader = torch.utils.data.DataLoader(dataset=test_dataset,
-                                                batch_size=args.batch_size,
-                                                shuffle=False)
         
         weight_matrix = get_weight(wvmodel,len(word2id),args.embedding_size)
         model = BiLSTM_CRF(len(word2id),label2id, args.embedding_size, weight_matrix, args.hidden_size).cuda()
@@ -299,24 +303,30 @@ else:
 
         model.eval()
 
-        all_test_logits = []
-        for feature in test_loader:
-            feature = feature.cuda()
+        all_test_tag = []
+        for idx in range(0, len(test_textlines), args.batch_size):
+
+            batch_feature = test_textlines[idx:idx + args.batch_size]
+
+            pad_batch_feature = torch.nn.utils.rnn.pad_sequence(batch_feature, batch_first=True, padding_value=padding_value)
+
+            feature = pad_batch_feature.cuda()
             
             _, y_hat = model(feature)
 
+            for idx , temp_hat in enumerate(y_hat):
+                tags_temp = []
+                for j in range(len(temp_hat)):
+                    tags_temp.append(id2label[temp_hat[j]])
+                all_test_tag.append(tags_temp[:len(batch_feature[idx])])
 
-            # batch_test_logits = torch.argmax(batch_test_output, dim=-1)
-            # all_test_logits.extend(batch_test_logits)
 
-        # with open('./dataset/result.txt', 'w', encoding='utf-8') as fresult:
-        #     for logit in all_test_logits:
-        #         if logit.tolist() == 1:
-        #             fresult.write('neg' + '\n')
-        #         elif logit.tolist() == 0:
-        #             fresult.write('pos' + '\n')
-
-        #     print('test end')
+        with open(args.test_result_path, 'w', encoding='utf-8') as fresult:
+            for tags_line in all_test_tag:
+                for tag_word in tags_line:
+                    fresult.write(tag_word + ' ')
+                fresult.write('\n')
+            print('test end')
 
 
 

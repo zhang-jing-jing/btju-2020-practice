@@ -29,7 +29,7 @@ class BiLSTM_CRF(nn.Module):
 
         self.word_embeds = nn.Embedding(vocab_size, embedding_dim)
         self.word_embeds.weight.data.copy_(embedding_vector)
-        self.word_embeds.weight.requires_grad = True
+        self.word_embeds.weight.requires_grad = False
     
         self.lstm = nn.LSTM(embedding_dim, hidden_dim // 2,
                             num_layers=1, dropout=0.5, bidirectional=True)
@@ -116,7 +116,7 @@ class BiLSTM_CRF(nn.Module):
             viterbivars, best_tag_id = torch.max(next_tag_var, dim=2)
             viterbivars, best_tag_id = viterbivars.squeeze(0), best_tag_id.squeeze(0)
             bptrs_t.append(best_tag_id.cpu().numpy().tolist())
-            viterbivars_t.append(viterbivars.cpu().numpy().tolist())
+            viterbivars_t.append(viterbivars.cpu().detach().numpy().tolist())
             forward_var = (viterbivars + feats[:, feat, :])
             backpointers.append(bptrs_t)
 
