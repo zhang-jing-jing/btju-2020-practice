@@ -72,6 +72,24 @@ def masked_softmax(tensor, mask):
 
     return result.view(*tensor_shape)
 
+def get_mask(sequences_batch, sequences_lengths):
+    """
+    Get the mask for a batch of padded variable length sequences.
+    Args:
+        sequences_batch: A batch of padded variable length sequences
+            containing word indices. Must be a 2-dimensional tensor of size
+            (batch, sequence).
+        sequences_lengths: A tensor containing the lengths of the sequences in
+            'sequences_batch'. Must be of size (batch).
+    Returns:
+        A mask of size (batch, max_sequence_length), where max_sequence_length
+        is the length of the longest sequence in the batch.
+    """
+    batch_size = sequences_batch.size()[0]
+    max_length = torch.max(sequences_lengths)
+    mask = torch.ones(batch_size, max_length, dtype=torch.float)
+    mask[sequences_batch[:, :max_length] == 0] = 0.0
+    return mask
 
 # Code widely inspired from:
 # https://github.com/allenai/allennlp/blob/master/allennlp/nn/util.py.
@@ -134,7 +152,7 @@ def correct_predictions(output_probabilities, targets):
     correct = (out_classes == targets).sum()
     return correct.item()
     
-class RNNDropout(nn.dropout):
+class RNNDropout(nn.Dropout):
     """
     Dropout layer for the inputs of RNNs.
     Apply the same dropout mask to all the elements of the same sequence in
